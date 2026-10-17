@@ -1,0 +1,90 @@
+Figures will be written to:
+  C:\Users\vaibh\Downloads\Rattleback_code (1)\Rattleback_code\figures
+
+========================================================================
+MAIN STUDY - four contact models, both senses of initial spin
+========================================================================
+
+model                          sense          t_rev     w3(end)   N range (N)        dE (J)      checks
+----------------------------------------------------------------------------------------------------------------
+Rolling                        preferred      none      5.000     [   9.81,    9.81] 1.67e-16    gv=0e+00 E-ok N-ok
+Rolling                        non-preferred  2.83      5.000     [   1.96,   57.47] -1.44e-11   gv=0e+00 E-ok N-ok
+Coulomb, \mu = 0.15            preferred      none      5.000     [   9.81,    9.81] -4.65e-11   gv=2e-11 E-ok N-ok
+Coulomb, \mu = 0.15            non-preferred  4.22      1.012     [   7.46,   12.79] -2.10e-02   gv=5e-08 E-ok N-ok
+Coulomb + spin, \rho = 0.5 mm  preferred      none      1.637     [   9.81,    9.81] -1.95e-02   gv=6e-12 E-ok N-ok
+Coulomb + spin, \rho = 0.5 mm  non-preferred  3.98      0.018     [   7.47,   12.77] -2.18e-02   gv=4e-08 E-ok N-ok
+Viscous, c = 500               preferred      none      5.000     [   9.81,    9.81] -1.47e-10   gv=4e-14 E-ok N-ok
+Viscous, c = 500               non-preferred  2.90      1.396     [   3.92,   25.83] -2.02e-02   gv=9e-08 E-ok N-ok
+
+========================================================================
+EPSILON SWEEP - regularisation convergence
+========================================================================
+   eps (m/s)    t_rev (s)      w3(end)      max|gv|
+----------------------------------------------------
+     1.0e-02         none      -1.9181     3.37e-08
+     3.0e-03         none      -0.6016     2.54e-08
+     1.0e-03         4.85       0.3147     2.87e-08
+     3.0e-04         4.35       0.7753     3.05e-08
+     1.0e-04         4.26       0.9424     5.90e-08
+     3.0e-05         4.22       1.0120     5.14e-08
+     1.0e-05         4.22       1.0352     7.07e-08
+
+The reversal time is converged where the upper curve is flat
+(eps <= 3e-5 m/s for these parameters).
+
+========================================================================
+RHO SWEEP - drilling friction vs contact patch radius
+========================================================================
+  rho (mm)  t_cross (s)    w3 end (pref)  w3 end (non-pref)  theta max (deg)
+----------------------------------------------------------------------------
+      0.00         4.22            5.000              1.012            0.834
+      0.10         4.19            4.329              0.777            0.836
+      0.20         4.15            3.655              0.521            0.839
+      0.50         3.98            1.637              0.018            0.840
+      1.00         3.68           -0.000              0.021            0.715
+      2.00        2.99*            0.000              0.000            0.059
+
+Hertzian estimate of the lever arm: rho = 0.16-0.52 mm (steel on
+steel to polymer on glass). At 2 mm the drilling torque stops the
+body before the instability develops. * = spin-down, not reversal.
+
+========================================================================
+MU SWEEP - convergence to the rolling benchmark
+========================================================================
+rolling benchmark: t_rev = 2.83 s, N in [1.96, 57.00] N
+
+      mu    t_rev (s)      w3(end)        N range (N)
+------------------------------------------------------
+    0.05         none       -2.528   [  9.66,    9.96]
+    0.15         4.22        1.012   [  7.46,   12.78]
+    0.50         2.84        4.270   [  2.07,   47.99]
+    1.00         2.83        4.990   [  1.97,   56.52]
+    2.00         2.83        4.995   [  1.97,   57.00]
+
+========================================================================
+INITIAL SPIN COMPARISON
+========================================================================
+                   model       w0    t_rev (s)      w3(end)
+------------------------------------------------------------
+                 Rolling      2.5         4.53        2.500
+                 Rolling      5.0         2.83        5.000
+     Coulomb, \mu = 0.15      2.5         5.21        1.006
+     Coulomb, \mu = 0.15      5.0         4.22        1.012
+
+========================================================================
+FIXED N - solved normal reaction against N = m*g
+========================================================================
+      mu   t_rev solved N     t_rev N = mg      error
+------------------------------------------------------
+    0.15             4.22             4.17      -1.3%
+    0.20             3.37             3.29      -2.3%
+    0.50             2.84             2.44     -14.2%
+    1.00             2.83             2.43     -14.3%
+    2.00             2.83             2.43     -14.2%
+rolling benchmark: t_rev = 2.83 s
+
+Done.
+
+
+     0
+

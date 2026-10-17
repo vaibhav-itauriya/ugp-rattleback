@@ -1,0 +1,15 @@
+# LaTeX build files
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*Notes.bib
+*.synctex.gz
+# MATLAB / Python outputs
+code/python/runs/
+code/python/figs/
+code/python/movies/
+__pycache__/
+*.asv
+.DS_Store
