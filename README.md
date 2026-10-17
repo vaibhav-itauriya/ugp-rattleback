@@ -8,6 +8,8 @@ Undergraduate project (UGP)
 
 📄 **Paper:** [`paper/Itauriya_Mukherjee_rattleback.pdf`](paper/Itauriya_Mukherjee_rattleback.pdf)
 
+🌀 **Interactive simulator:** <https://vaibhav-itauriya.github.io/ugp-rattleback/>. Choose the contact model, friction and launch conditions; it computes the motion in your browser and shows the results, all the time histories and a 3D view of the rattleback.
+
 ---
 
 ## Summary
@@ -58,6 +60,9 @@ code/
     figures/                          figures exported by that run
   python/                             independent cross-check and movie renderer
 movies/                               six animations (0.4x real time)
+docs/                                 interactive simulator (GitHub Pages site)
+  js/model.js                         the same equations in JavaScript
+tools/validate_model.mjs              checks model.js against the paper's numbers
 ```
 
 ## Running
@@ -84,6 +89,10 @@ python3 videos.py coulomb_nonpref   # one movie; also rolling_nonpref,
 ```
 
 The two implementations agree on reversal times to within 0.002 s.
+
+**Browser simulator**: open the link above, or serve `docs/` locally
+(`python3 -m http.server -d docs`) and visit <http://localhost:8000>. To check
+its physics against the paper: `node tools/validate_model.mjs`.
 
 ## Parameters
 
