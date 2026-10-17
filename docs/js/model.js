@@ -165,43 +165,110 @@ const A = [[], [1 / 5], [3 / 40, 9 / 40], [44 / 45, -56 / 15, 32 / 9],
 const B5 = [35 / 384, 0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84, 0];
 const E = [71 / 57600, 0, -71 / 16695, 71 / 1920, -17253 / 339200, 22 / 525, -1 / 40];
 
+// Allocation-free right-hand side for the slipping models (the hot loop of the
+// stiff Coulomb case). Same equations as contact() + rhs() above, written out in
+// scalars; tools/validate_model.mjs checks the two agree.
+function rhsSlip(B, y, out) {
+  const w0 = y[0], w1 = y[1], w2 = y[2], v0 = y[6], v1 = y[7], v2 = y[8];
+  const sf = Math.sin(y[3]), cf = Math.cos(y[3]), st = Math.sin(y[4]), ct = Math.cos(y[4]), sp = Math.sin(y[5]), cp = Math.cos(y[5]);
+  const n0 = sf * sp - cp * st * cf, n1 = cp * sf + sp * st * cf, n2 = ct * cf;
+  const nd0 = -(w1 * n2 - w2 * n1), nd1 = -(w2 * n0 - w0 * n2), nd2 = -(w0 * n1 - w1 * n0);
+  const q0 = B.A2[0], q1 = B.A2[1], q2 = B.A2[2];
+  const S = q0 * n0 * n0 + q1 * n1 * n1 + q2 * n2 * n2, sq = Math.sqrt(S), S15 = S * sq;
+  const r0 = -q0 * n0 / sq, r1 = -q1 * n1 / sq, r2 = -q2 * n2 / sq + B.b;
+  const Sd = q0 * n0 * nd0 + q1 * n1 * nd1 + q2 * n2 * nd2;
+  const rd0 = -q0 * nd0 / sq + q0 * n0 * Sd / S15, rd1 = -q1 * nd1 / sq + q1 * n1 * Sd / S15, rd2 = -q2 * nd2 / sq + q2 * n2 * Sd / S15;
+  let p0 = v0 + w1 * r2 - w2 * r1, p1 = v1 + w2 * r0 - w0 * r2, p2 = v2 + w0 * r1 - w1 * r0;
+  const vn = p0 * n0 + p1 * n1 + p2 * n2; p0 -= vn * n0; p1 -= vn * n1; p2 -= vn * n2;
+  const d0 = n1 * r2 - n2 * r1, d1 = n2 * r0 - n0 * r2, d2 = n0 * r1 - n1 * r0;
+  const c = -(rd0 * nd0 + rd1 * nd1 + rd2 * nd2) + r0 * (w1 * nd2 - w2 * nd1) + r1 * (w2 * nd0 - w0 * nd2) + r2 * (w0 * nd1 - w1 * nd0);
+  const I = B.I, Ii = B.Ii;
+  const Iw0 = I[0][0] * w0 + I[0][1] * w1, Iw1 = I[1][0] * w0 + I[1][1] * w1, Iw2 = I[2][2] * w2;
+  const g0 = w1 * Iw2 - w2 * Iw1, g1 = w2 * Iw0 - w0 * Iw2, g2 = w0 * Iw1 - w1 * Iw0;
+  const a00 = Ii[0][0], a01 = Ii[0][1], a11 = Ii[1][1], a22 = Ii[2][2];
+  const rn0 = r1 * n2 - r2 * n1, rn1 = r2 * n0 - r0 * n2, rn2 = r0 * n1 - r1 * n0;
+  const Bv0 = a00 * rn0 + a01 * rn1, Bv1 = a01 * rn0 + a11 * rn1, Bv2 = a22 * rn2;
+  const pp = p0 * p0 + p1 * p1 + p2 * p2;
+  let A00, A01, A02, A10 = 0, A11 = 0, A12 = 0, F0, F1, F2, u0 = 0, u1 = 0, u2 = 0;
+  const visc = B.law === 'viscous';
+  if (visc) {
+    F0 = -B.cv * p0; F1 = -B.cv * p1; F2 = -B.cv * p2;
+    const t0 = r1 * F2 - r2 * F1 - g0, t1 = r2 * F0 - r0 * F2 - g1, t2 = r0 * F1 - r1 * F0 - g2;
+    A00 = a00 * t0 + a01 * t1; A01 = a01 * t0 + a11 * t1; A02 = a22 * t2;
+  } else {
+    A00 = -(a00 * g0 + a01 * g1); A01 = -(a01 * g0 + a11 * g1); A02 = -a22 * g2;
+    const s = Math.sqrt(pp + B.eps * B.eps); u0 = p0 / s; u1 = p1 / s; u2 = p2 / s;
+    const mu = B.mu;
+    let t0 = -mu * (r1 * u2 - r2 * u1), t1 = -mu * (r2 * u0 - r0 * u2), t2 = -mu * (r0 * u1 - r1 * u0);
+    if (B.rho > 0) {
+      const sc = B.rho * (w0 * n0 + w1 * n1 + w2 * n2);
+      const sg = sc / Math.sqrt(sc * sc + pp + B.eps * B.eps), k = mu * B.rho * sg;
+      t0 -= k * n0; t1 -= k * n1; t2 -= k * n2;
+    }
+    A10 = a00 * t0 + a01 * t1; A11 = a01 * t0 + a11 * t1; A12 = a22 * t2;
+  }
+  const m = B.m, g = B.g;
+  const den = 1 - m * (d0 * Bv0 + d1 * Bv1 + d2 * Bv2) - m * (d0 * A10 + d1 * A11 + d2 * A12);
+  let N = m * (g + c + d0 * A00 + d1 * A01 + d2 * A02) / den;
+  if (B.fixN) N = m * g;
+  if (!visc) { F0 = -B.mu * N * u0; F1 = -B.mu * N * u1; F2 = -B.mu * N * u2; }
+  out[0] = A00 + N * (Bv0 + A10); out[1] = A01 + N * (Bv1 + A11); out[2] = A02 + N * (Bv2 + A12);
+  const phid = (w0 * cp - w1 * sp) / ct;
+  out[3] = phid; out[4] = w0 * sp + w1 * cp; out[5] = w2 - st * phid;
+  out[6] = (N * n0 + F0) / m - g * n0 - (w1 * v2 - w2 * v1);
+  out[7] = (N * n1 + F1) / m - g * n1 - (w2 * v0 - w0 * v2);
+  out[8] = (N * n2 + F2) / m - g * n2 - (w0 * v1 - w1 * v0);
+  out[9] = ct * cp * v0 - ct * sp * v1 + st * v2;
+  out[10] = (cf * sp + sf * st * cp) * v0 + (cf * cp - sf * st * sp) * v1 - sf * ct * v2;
+}
+export function rhsInto(B, y, out) {
+  if (B.law === 'rolling') { const f = rhs(B, y); for (let j = 0; j < 11; j++) out[j] = f[j]; }
+  else rhsSlip(B, y, out);
+}
+
 // Integrate to tEnd and return samples every dtOut. The regularized Coulomb law is
 // stiff (Jacobian ~ mu N / eps); the adaptive step simply shrinks to stay stable.
-export function integrate(B, onProgress) {
-  const nY = 11, y0 = initialState(B);
-  const nOut = Math.round(B.tEnd / B.dtOut) + 1;
+export function integrate(B, onProgress, shouldStop) {
+  const nY = 11, nOut = Math.round(B.tEnd / B.dtOut) + 1;
   const T = new Float64Array(nOut), Y = Array.from({ length: nY }, () => new Float64Array(nOut));
-  let y = y0.slice(), t = 0, h = 1e-5, k1 = rhs(B, y), nSteps = 0, nRej = 0, iOut = 0;
+  let y = Float64Array.from(initialState(B)), yNew = new Float64Array(nY);
+  const ys = new Float64Array(nY), k = Array.from({ length: 7 }, () => new Float64Array(nY));
+  rhsInto(B, y, k[0]);
+  let t = 0, h = 1e-5, nSteps = 0, nRej = 0, iOut = 0, lastReport = 0;
   const store = () => { T[iOut] = t; for (let j = 0; j < nY; j++) Y[j][iOut] = y[j]; iOut++; };
   store();
-  const k = new Array(7);
-  let lastReport = 0;
   while (iOut < nOut) {
     const tNext = iOut * B.dtOut;
     if (t + h > tNext) h = tNext - t;
-    k[0] = k1;
     for (let s = 1; s < 7; s++) {
-      const ys = new Array(nY);
-      for (let j = 0; j < nY; j++) { let acc = y[j]; for (let q = 0; q < s; q++) acc += h * A[s][q] * k[q][j]; ys[j] = acc; }
-      k[s] = rhs(B, ys);
+      const As = A[s];
+      for (let j = 0; j < nY; j++) { let acc = y[j]; for (let q = 0; q < s; q++) acc += h * As[q] * k[q][j]; ys[j] = acc; }
+      rhsInto(B, ys, k[s]);
     }
-    let err = 0; const yNew = new Array(nY);
+    let err = 0;
     for (let j = 0; j < nY; j++) {
-      let acc = y[j]; for (let q = 0; q < 6; q++) acc += h * B5[q] * k[q][j];
+      let acc = y[j], e = 0;
+      for (let q = 0; q < 6; q++) acc += h * B5[q] * k[q][j];
+      for (let q = 0; q < 7; q++) e += h * E[q] * k[q][j];
       yNew[j] = acc;
-      let e = 0; for (let q = 0; q < 7; q++) e += h * E[q] * k[q][j];
       const sc = B.atol + B.rtol * Math.max(Math.abs(y[j]), Math.abs(acc));
-      err = Math.max(err, Math.abs(e) / sc);
+      const r = Math.abs(e) / sc; if (r > err) err = r;
     }
-    if (!isFinite(err)) throw new Error('The integration diverged. Try a larger regularization velocity or smaller friction.');
+    if (!(err < Infinity)) throw new Error('The integration diverged. Try a larger regularization velocity ε or a smaller friction coefficient.');
     if (err <= 1) {
-      t += h; y = yNew; k1 = k[6]; nSteps++;
+      t += h; const tmp = y; y = yNew; yNew = tmp;
+      const k6 = k[6]; k[6] = k[0]; k[0] = k6;           // FSAL: last stage is the next first stage
+      nSteps++;
       if (Math.abs(t - tNext) < 1e-12) { t = tNext; store(); }
-      if (onProgress && t - lastReport > 0.05) { lastReport = t; onProgress(t / B.tEnd); }
+      if (t - lastReport > 0.05) {
+        lastReport = t;
+        if (onProgress) onProgress(t / B.tEnd);
+        if (shouldStop && shouldStop()) throw new Error('Stopped.');
+      }
     } else nRej++;
     const fac = err === 0 ? 5 : Math.min(5, Math.max(0.2, 0.9 * Math.pow(err, -0.2)));
     h = Math.max(h * fac, 1e-12);
-    if (nSteps + nRej > 5e7) throw new Error('Too many steps. Reduce the simulated time or increase the regularization velocity.');
+    if (nSteps + nRej > 5e7) throw new Error('Too many steps. Shorten the simulated time or increase the regularization velocity ε.');
   }
   return { T, Y, nSteps, nRej };
 }
@@ -254,10 +321,10 @@ export function summarize(B, T, Y, D) {
   };
 }
 
-export function simulate(params, onProgress) {
+export function simulate(params, onProgress, shouldStop) {
   const B = makeBody({ ...DEFAULTS, ...params });
   const t0 = (typeof performance !== 'undefined' ? performance : Date).now();
-  const { T, Y, nSteps, nRej } = integrate(B, onProgress);
+  const { T, Y, nSteps, nRej } = integrate(B, onProgress, shouldStop);
   const D = diagnostics(B, T, Y);
   const S = summarize(B, T, Y, D);
   const ms = (typeof performance !== 'undefined' ? performance : Date).now() - t0;

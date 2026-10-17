@@ -8,7 +8,14 @@ Undergraduate project (UGP)
 
 📄 **Paper:** [`paper/Itauriya_Mukherjee_rattleback.pdf`](paper/Itauriya_Mukherjee_rattleback.pdf)
 
-🌀 **Interactive simulator:** <https://vaibhav-itauriya.github.io/ugp-rattleback/>. Choose the contact model, friction and launch conditions; it computes the motion in your browser and shows the results, all the time histories and a 3D view of the rattleback.
+🌀 **Interactive simulator:** <https://vaibhav-itauriya.github.io/ugp-rattleback/>. A simulation workbench that runs the same equations in your browser:
+
+- **Model setup**: rolling, Coulomb (with optional drilling torque) or viscous contact; solved or fixed normal reaction; launch sense, spin, duration and tilt; body geometry and inertia; solver tolerance. Fields are checked as you type.
+- **3D view**: camera presets, follow and path toggles, contact-point marker, tilt exaggeration and a playback bar with a jump to the reversal.
+- **Results**: reversal time, final spin, rocking, energy lost, N range, slip, |F|/N, a plain-language verdict and four verification checks, plus live values at the playhead.
+- **Dock**: synced time histories, a history of every run with up to six overlaid, one-parameter sweeps (μ, ρ, c, |ω₀|, ε, I₁₂), a solver log and model notes.
+- **Export**: time histories, run history and sweeps as CSV, a PNG of the 3D view, settings as JSON, and a link that reopens the same setup.
+- Nine ready-made cases from the paper, keyboard shortcuts (press <kbd>?</kbd>), light and dark themes, and a phone layout.
 
 ---
 

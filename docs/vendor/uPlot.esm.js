@@ -430,7 +430,7 @@ function _rangeNum(_min, _max, cfg) {
 }
 
 // alternative: https://stackoverflow.com/a/2254896
-const numFormatter = new Intl.NumberFormat(domEnv ? nav.language : 'en-US');
+const numFormatter = (() => { try { return new Intl.NumberFormat(domEnv ? nav.language : 'en-US'); } catch (e) { return new Intl.NumberFormat('en-US'); } })(); // patched: tolerate invalid locale tags
 const fmtNum = val => numFormatter.format(val);
 
 const M = Math;

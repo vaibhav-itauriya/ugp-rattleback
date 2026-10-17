@@ -9,7 +9,7 @@ const U = 10; // metres -> scene units
 export class Stage {
   constructor(container) {
     this.el = container;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -44,7 +44,9 @@ export class Stage {
       (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches));
 
     this.body = new THREE.Group(); this.scene.add(this.body);
-    this.trail = null; this.data = null; this.exag = 1; this.follow = true;
+    this.marker = new THREE.Mesh(new THREE.RingGeometry(0.035, 0.075, 32), new THREE.MeshBasicMaterial({ color: 0xeb6834, fog: false }));
+    this.marker.visible = false; this.scene.add(this.marker);
+    this.trail = null; this.data = null; this.exag = 1; this.follow = true; this.showContact = false;
     this.resize = this.resize.bind(this);
     new ResizeObserver(this.resize).observe(container);
     this.resize();
@@ -54,9 +56,9 @@ export class Stage {
 
   setTheme(dark) {
     this.grid.clear();
-    const bg = dark ? 0x141d21 : 0xe9eeec;
+    const bg = dark ? 0x10161a : 0xdce3e1;
     this.scene.fog = new THREE.Fog(bg, 7, 16);
-    const minor = dark ? 0x26343a : 0xd6dfdc, major = dark ? 0x34464d : 0xb9c7c3;
+    const minor = dark ? 0x1f2a30 : 0xcbd5d2, major = dark ? 0x2e3d44 : 0xaebdb8;
     const mk = (size, div, col) => { const g = new THREE.GridHelper(size, div, col, col); g.rotation.x = Math.PI / 2; g.position.z = 0.0005; return g; };
     this.grid.add(mk(12, 24, minor)); const M = mk(40, 16, major); M.position.z = 0.001; this.grid.add(M);
   }
@@ -101,6 +103,18 @@ export class Stage {
   }
 
   setTrail(on) { this.showTrail = on; if (this.trail) this.trail.visible = on; }
+  setContact(on) { this.showContact = on; this.marker.visible = on && !!this.data; }
+
+  // camera presets, relative to the current target
+  setView(name) {
+    const t = this.controls.target, off = {
+      iso: [-4.4, -7.0, 2.15], front: [0, -8.4, 0.75], side: [-8.4, 0, 0.75], top: [0.001, -0.01, 8.6],
+    }[name] || [-4.4, -7.0, 2.15];
+    this.camera.position.set(t.x + off[0], t.y + off[1], t.z + off[2]);
+    this.controls.update();
+  }
+
+  snapshot() { this.renderer.render(this.scene, this.camera); return this.renderer.domElement.toDataURL('image/png'); }
 
   // place the body at sample i (rocking angles optionally exaggerated about the
   // current heading, so the yaw is untouched and only the tilt is scaled)
@@ -110,7 +124,7 @@ export class Stage {
     let phi = R.Y[3][i], th = R.Y[4][i]; const ps = R.Y[5][i];
     if (this.exag !== 1) { phi *= this.exag; th *= this.exag; }
     const w = [R.Y[0][i], R.Y[1][i], R.Y[2][i]];
-    const { h } = geom(B, phi, th, ps, w);
+    const { h, r } = geom(B, phi, th, ps, w);
     const Q = rotmat(phi, th, ps);
     const m = new THREE.Matrix4().set(
       Q[0][0], Q[0][1], Q[0][2], R.Y[9][i] * U,
@@ -119,6 +133,10 @@ export class Stage {
       0, 0, 0, 1);
     this.body.matrixAutoUpdate = false; this.body.matrix.copy(m); this.body.matrixWorldNeedsUpdate = true;
     if (this.trail) this.trail.geometry.setDrawRange(0, i + 1);
+    // computed contact point P = G + Q r, drawn as a ring on the table
+    const px = R.Y[9][i] + Q[0][0] * r[0] + Q[0][1] * r[1] + Q[0][2] * r[2];
+    const py = R.Y[10][i] + Q[1][0] * r[0] + Q[1][1] * r[1] + Q[1][2] * r[2];
+    this.marker.position.set(px * U, py * U, 0.004); this.marker.visible = this.showContact;
     if (this.follow) {
       const tx = R.Y[9][i] * U, ty = R.Y[10][i] * U;
       const dx = tx - this.controls.target.x, dy = ty - this.controls.target.y;

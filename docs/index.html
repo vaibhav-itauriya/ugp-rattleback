@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Rattleback Simulator</title>
-<meta name="description" content="Simulate a rattleback spinning on a table with rolling, Coulomb, drilling or viscous friction. Choose the contact model and parameters, then watch the motion and read the results.">
+<meta name="description" content="Simulate a rattleback spinning on a table with rolling, Coulomb, drilling or viscous contact friction. Set up the model, run it in the browser, watch the motion in 3D, compare runs and sweep parameters.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@600&display=swap" rel="stylesheet">
@@ -12,218 +12,281 @@
 <link rel="stylesheet" href="css/app.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cellipse cx='32' cy='30' rx='28' ry='9' fill='%238b5a2b'/%3E%3Cpath d='M4 30a28 9 0 0 0 56 0' fill='%236b4320'/%3E%3C/svg%3E">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+<script>try { const t = localStorage.getItem('rb-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 </head>
 <body>
+<div class="wb">
 
-<header class="top">
-  <h1>Rattleback simulator</h1>
-  <p>Spin a rattleback on a table, choose how its contact point grips, and watch whether the spin reverses.</p>
-  <nav>
-    <a href="https://github.com/vaibhav-itauriya/ugp-rattleback/blob/main/paper/Itauriya_Mukherjee_rattleback.pdf">Paper</a>
-    <a href="https://github.com/vaibhav-itauriya/ugp-rattleback">Code</a>
-    <button class="theme-btn" id="themeBtn" type="button" aria-label="Switch colour theme">Theme</button>
-  </nav>
+<!-- ============================================================ toolbar -->
+<header class="toolbar">
+  <div class="brand">
+    <svg viewBox="0 0 60 36" aria-hidden="true"><ellipse cx="30" cy="14" rx="28" ry="8" fill="#c99566"/><path d="M2 14a28 8 0 0 0 56 0v2a28 12 0 0 1-56 0z" fill="#8b5a2b"/><path d="M2 14c0 9 12.5 16 28 16s28-7 28-16" fill="#8b5a2b"/><line x1="6" y1="14" x2="54" y2="14" stroke="#5a3519" stroke-width="1.6"/></svg>
+    <div><h1>Rattleback<span class="hide-xs"> simulator</span></h1><small>Rolling and slipping contact dynamics</small></div>
+  </div>
+  <span class="tb-sep"></span>
+  <label class="tb-label" for="preset">Case</label>
+  <select class="sel" id="preset"></select>
+  <button class="btn primary" id="runBtn" type="button" title="Run the simulation (Ctrl+Enter)">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>Run <kbd class="hide-sm">Ctrl ↵</kbd></button>
+  <button class="btn" id="stopBtn" type="button" disabled title="Stop the computation (Esc)">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" rx="1" fill="currentColor"/></svg>Stop</button>
+  <span class="tb-sep"></span>
+  <details class="menu" id="exportMenu">
+    <summary class="btn">Export
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></summary>
+    <div class="menu-list" role="menu">
+      <button type="button" role="menuitem" data-act="csv" disabled>Time histories <span class="meta">CSV</span></button>
+      <button type="button" role="menuitem" data-act="summary" disabled>Run history and results <span class="meta">CSV</span></button>
+      <button type="button" role="menuitem" data-act="png" disabled>3D view snapshot <span class="meta">PNG</span></button>
+      <button type="button" role="menuitem" data-act="json">Model settings <span class="meta">JSON</span></button>
+      <button type="button" role="menuitem" data-act="link">Copy link to these settings</button>
+    </div>
+  </details>
+  <span class="spacer"></span>
+  <a class="btn ghost hide-sm" href="https://github.com/vaibhav-itauriya/ugp-rattleback/blob/main/paper/Itauriya_Mukherjee_rattleback.pdf">Paper</a>
+  <a class="btn ghost hide-sm" href="https://github.com/vaibhav-itauriya/ugp-rattleback">Source</a>
+  <button class="btn ghost" id="helpBtn" type="button" title="Keyboard shortcuts (?)">Shortcuts</button>
+  <button class="btn ghost" id="themeBtn" type="button" title="Switch between light and dark">Theme</button>
 </header>
 
-<div class="app">
-  <!-- ======================================================= controls -->
-  <form class="controls" id="controls" autocomplete="off" novalidate>
-    <fieldset class="group">
-      <legend>Start from a case in the paper</legend>
-      <select class="preset-select" id="preset" aria-label="Preset case"></select>
-      <p class="preset-note" id="presetNote"></p>
-    </fieldset>
-
-    <fieldset class="group">
-      <legend>Contact model</legend>
-      <div class="seg" role="radiogroup" aria-label="Contact model">
-        <input type="radio" name="law" id="law-rolling" value="rolling"><label for="law-rolling">Rolling</label>
-        <input type="radio" name="law" id="law-coulomb" value="coulomb" checked><label for="law-coulomb">Coulomb</label>
-        <input type="radio" name="law" id="law-viscous" value="viscous"><label for="law-viscous">Viscous</label>
-      </div>
-
-      <div class="field" data-for="coulomb">
-        <label for="mu">Friction coefficient μ</label>
-        <input type="number" id="mu" step="0.01" min="0.001" max="5" value="0.15">
-        <input type="range" id="mu-r" min="0.01" max="2" step="0.01" value="0.15" aria-label="Friction coefficient slider">
-      </div>
-      <div class="field" data-for="coulomb">
-        <label for="eps">Slip regularization ε <span class="unit">m/s</span></label>
-        <select id="eps">
-          <option value="1e-3">1×10⁻³</option><option value="3e-4">3×10⁻⁴</option>
-          <option value="1e-4">1×10⁻⁴</option><option value="3e-5" selected>3×10⁻⁵</option>
-          <option value="1e-5">1×10⁻⁵</option>
-        </select>
-        <span class="hint">Smooths the Coulomb law at zero slip. Results are converged at 3×10⁻⁵; 10⁻³ reverses about 15% too late.</span>
-      </div>
-      <label class="check" data-for="coulomb"><input type="checkbox" id="drill"> Add drilling (spin) friction</label>
-      <div class="field" data-for="drill">
-        <label for="rho">Lever arm ρ <span class="unit">mm</span></label>
-        <input type="number" id="rho" step="0.05" min="0" max="5" value="0.5">
-        <input type="range" id="rho-r" min="0" max="2.5" step="0.05" value="0.5" aria-label="Lever arm slider">
-        <span class="hint">Hertzian estimate 0.16–0.52 mm. Around 2 mm it stops the body before the rocking can grow.</span>
-      </div>
-      <div class="field" data-for="viscous">
-        <label for="cv">Viscous coefficient c <span class="unit">kg/s</span></label>
-        <input type="number" id="cv" step="10" min="0.1" max="20000" value="500">
-        <input type="range" id="cv-r" min="0" max="3.5" step="0.01" value="2.699" aria-label="Viscous coefficient slider, logarithmic">
-        <span class="hint">Slider is logarithmic, 1 to 3000 kg/s. Below about 200 there is no reversal.</span>
-      </div>
-      <div class="field" data-for="slip">
-        <label for="nmode">Normal reaction N</label>
-        <select id="nmode"><option value="solved" selected>Solved</option><option value="fixed">Fixed at mg</option></select>
-        <span class="hint">Fixed at mg is the common shortcut; the paper shows it is 14% off near the rolling limit.</span>
-      </div>
-    </fieldset>
-
-    <fieldset class="group">
-      <legend>Launch</legend>
-      <div class="seg" role="radiogroup" aria-label="Sense of spin">
-        <input type="radio" name="sense" id="sense-non" value="-1" checked><label for="sense-non">Unstable sense</label>
-        <input type="radio" name="sense" id="sense-pref" value="1"><label for="sense-pref">Preferred sense</label>
-      </div>
-      <div class="field">
-        <label for="w0">Initial spin |ω₀| <span class="unit">rad/s</span></label>
-        <input type="number" id="w0" step="0.5" min="0.1" max="30" value="5">
-        <input type="range" id="w0-r" min="0.5" max="15" step="0.5" value="5" aria-label="Initial spin slider">
-      </div>
-      <div class="field">
-        <label for="tEnd">Simulated time <span class="unit">s</span></label>
-        <input type="number" id="tEnd" step="1" min="1" max="30" value="8">
-      </div>
-      <div class="field">
-        <label for="tilt0">Initial tilt <span class="unit">deg</span></label>
-        <input type="number" id="tilt0" step="0.1" min="0" max="10" value="0">
-        <span class="hint">0 starts from a 10⁻⁶ rad nudge. A larger tilt is like a tap on the end.</span>
-      </div>
-    </fieldset>
-
-    <details class="body-params">
-      <summary>Body (Kane and Levinson)</summary>
-      <div class="field"><label for="m">Mass m <span class="unit">kg</span></label><input type="number" id="m" step="0.1" min="0.01" value="1"></div>
-      <div class="field"><label for="a1">Semi-axis a₁ <span class="unit">m</span></label><input type="number" id="a1" step="0.01" min="0.001" value="0.20"></div>
-      <div class="field"><label for="a2">Semi-axis a₂ <span class="unit">m</span></label><input type="number" id="a2" step="0.005" min="0.001" value="0.03"></div>
-      <div class="field"><label for="a3">Semi-axis a₃ <span class="unit">m</span></label><input type="number" id="a3" step="0.005" min="0.001" value="0.02"></div>
-      <div class="field"><label for="b">Centre offset b <span class="unit">m</span></label><input type="number" id="b" step="0.001" min="0" value="0.005"></div>
-      <div class="field"><label for="I11">I₁₁ <span class="unit">×10⁻⁴ kg m²</span></label><input type="number" id="I11" step="0.1" value="2.0"></div>
-      <div class="field"><label for="I22">I₂₂ <span class="unit">×10⁻⁴ kg m²</span></label><input type="number" id="I22" step="0.1" value="16.0"></div>
-      <div class="field"><label for="I33">I₃₃ <span class="unit">×10⁻⁴ kg m²</span></label><input type="number" id="I33" step="0.1" value="17.5"></div>
-      <div class="field"><label for="I12">I₁₂ <span class="unit">×10⁻⁴ kg m²</span></label><input type="number" id="I12" step="0.1" value="-0.5">
-        <span class="hint">The chirality. Its sign picks the preferred sense; set it to 0 and nothing reverses.</span></div>
-    </details>
-
-    <button class="btn secondary share" id="linkBtn" type="button">Copy link to these settings</button>
-    <div class="actions">
-      <div class="progress" aria-hidden="true"><div id="bar"></div></div>
-      <p class="status" id="status" role="status" aria-live="polite"></p>
-      <button class="btn" id="runBtn" type="submit">Run simulation</button>
-    </div>
-  </form>
-
-  <!-- ======================================================= main -->
-  <main class="main">
-    <div class="bench">
-      <div>
-        <div class="stage" id="stage">
-          <div class="hud" id="hud" hidden>
-            <span class="big" id="hudW">ω₃ −5.00 rad/s</span>
-            <span class="small" id="hudT">t = 0.00 s</span>
-            <span class="tag" id="hudX"></span>
+<div class="workspace">
+  <!-- ========================================================== setup panel -->
+  <aside class="panel left" aria-label="Model setup">
+    <div class="panel-head"><h2>Model setup</h2><span class="badge" id="dirty" hidden>Changed since last run</span></div>
+    <form id="setup" autocomplete="off" novalidate>
+      <details class="sec" open>
+        <summary>Contact model <span class="sum" id="sum-contact"></span></summary>
+        <div class="sec-body">
+          <div class="seg" role="radiogroup" aria-label="Contact model">
+            <input type="radio" name="law" id="law-rolling" value="rolling"><label for="law-rolling">Rolling</label>
+            <input type="radio" name="law" id="law-coulomb" value="coulomb" checked><label for="law-coulomb">Coulomb</label>
+            <input type="radio" name="law" id="law-viscous" value="viscous"><label for="law-viscous">Viscous</label>
           </div>
-          <div class="stage-empty" id="stageEmpty">Loading the 3D view…</div>
+          <div id="fields-contact"></div>
         </div>
-        <div class="transport">
-          <button type="button" id="playBtn" disabled>Play</button>
-          <input type="range" id="scrub" min="0" max="1000" value="0" step="1" aria-label="Playback position" disabled>
-          <select id="speed" aria-label="Playback speed">
-            <option value="0.1">0.1× speed</option><option value="0.25">0.25× speed</option>
-            <option value="0.5" selected>0.5× speed</option><option value="1">1× speed</option>
-          </select>
-          <span class="clock" id="clock">0.00 s</span>
+      </details>
+      <details class="sec" open>
+        <summary>Launch <span class="sum" id="sum-launch"></span></summary>
+        <div class="sec-body">
+          <div class="seg" role="radiogroup" aria-label="Sense of spin">
+            <input type="radio" name="sense" id="sense-non" value="-1" checked><label for="sense-non">Unstable sense</label>
+            <input type="radio" name="sense" id="sense-pref" value="1"><label for="sense-pref">Preferred sense</label>
+          </div>
+          <div id="fields-launch"></div>
         </div>
-        <div class="view-opts">
-          <label>Tilt shown <select id="exag"><option value="1" selected>true size</option><option value="5">×5</option><option value="20">×20</option></select></label>
-          <label><input type="checkbox" id="trail" checked> Path of the centre of mass</label>
-          <label><input type="checkbox" id="follow" checked> Camera follows the body</label>
+      </details>
+      <details class="sec">
+        <summary>Body <span class="sum">Kane and Levinson</span></summary>
+        <div class="sec-body"><div id="fields-body"></div><p class="derived" id="derived"></p></div>
+      </details>
+      <details class="sec">
+        <summary>Solver <span class="sum" id="sum-solver"></span></summary>
+        <div class="sec-body"><div id="fields-solver"></div>
+          <p class="derived">Adaptive Dormand–Prince 5(4), run in a background thread. The step size shrinks automatically where the Coulomb law is stiff.</p></div>
+      </details>
+    </form>
+  </aside>
+
+  <!-- ========================================================== center -->
+  <main class="center">
+    <div class="viewport" id="viewport">
+      <div class="hud" id="hud" hidden>
+        <span class="big" id="hudW">ω₃ −5.00 rad/s</span>
+        <span class="small" id="hudT">t = 0.00 s</span>
+        <span class="small" id="hudTilt">tilt 0.00°</span>
+        <span class="tag" id="hudX"></span>
+      </div>
+      <div class="vp-tools">
+        <div class="vp-group" role="group" aria-label="Camera">
+          <button type="button" data-view="iso" title="Three-quarter view (1)">Iso</button>
+          <button type="button" data-view="front" title="Look along the table (2)">Front</button>
+          <button type="button" data-view="side" title="Look along the long axis (3)">Side</button>
+          <button type="button" data-view="top" title="Look down (4)">Top</button>
+        </div>
+        <div class="vp-group" role="group" aria-label="Display">
+          <button type="button" id="tFollow" aria-pressed="true" title="Keep the body centred">Follow</button>
+          <button type="button" id="tTrail" aria-pressed="true" title="Path of the centre of mass">Path</button>
+          <button type="button" id="tContact" aria-pressed="false" title="Mark the contact point on the table">Contact</button>
+          <select id="exag" aria-label="Tilt drawn" title="Draw the tilt larger than it is">
+            <option value="1">Tilt ×1</option><option value="5">Tilt ×5</option><option value="20">Tilt ×20</option></select>
+        </div>
+      </div>
+      <div class="axes-key" aria-hidden="true"><span><i style="background:#f6efe4;border:1px solid #5a3519"></i>dot marks +e₁</span><span><i style="background:var(--s1)"></i>centre-of-mass path</span></div>
+      <div class="vp-empty" id="vpEmpty">Loading the 3D view…</div>
+    </div>
+
+    <div class="transport" role="group" aria-label="Playback">
+      <button class="btn icon" type="button" id="bStart" title="Go to start (Home)" disabled><svg viewBox="0 0 16 16"><path d="M3 3v10M13 3L6 8l7 5z" fill="currentColor" stroke="currentColor" stroke-width="1.4"/></svg><span class="sr-only">Go to start</span></button>
+      <button class="btn icon" type="button" id="bBack" title="Step back 10 ms (Left arrow)" disabled><svg viewBox="0 0 16 16"><path d="M11 3L5 8l6 5z" fill="currentColor"/></svg><span class="sr-only">Step back</span></button>
+      <button class="btn primary" type="button" id="bPlay" title="Play or pause (Space)" disabled style="min-width:78px"><svg viewBox="0 0 16 16" id="playIcon"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg><span id="playTxt">Play</span></button>
+      <button class="btn icon" type="button" id="bFwd" title="Step forward 10 ms (Right arrow)" disabled><svg viewBox="0 0 16 16"><path d="M5 3l6 5-6 5z" fill="currentColor"/></svg><span class="sr-only">Step forward</span></button>
+      <button class="btn icon" type="button" id="bEnd" title="Go to end (End)" disabled><svg viewBox="0 0 16 16"><path d="M13 3v10M3 3l7 5-7 5z" fill="currentColor" stroke="currentColor" stroke-width="1.4"/></svg><span class="sr-only">Go to end</span></button>
+      <button class="btn" type="button" id="bRev" title="Jump to the reversal (R)" disabled>Reversal</button>
+      <div class="timeline"><input type="range" id="scrub" min="0" max="1000" value="0" step="1" aria-label="Playback position" disabled><span class="marker" id="revMark" hidden></span></div>
+      <span class="clock" id="clock">0.00 / 0.00 s</span>
+      <select class="sel" id="speed" aria-label="Playback speed" title="Playback speed">
+        <option value="0.1">0.1×</option><option value="0.25">0.25×</option><option value="0.5" selected>0.5×</option><option value="1">1×</option><option value="2">2×</option></select>
+      <button class="btn" type="button" id="bLoop" aria-pressed="false" title="Loop playback">Loop</button>
+    </div>
+
+    <div class="splitter" id="splitter" role="separator" aria-orientation="horizontal" aria-label="Resize the results dock" tabindex="0"></div>
+
+    <section class="dock" aria-label="Results dock">
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" aria-controls="tab-hist" id="t-hist">Time histories</button>
+        <button role="tab" aria-selected="false" aria-controls="tab-cmp" id="t-cmp">Compare runs<span class="count" id="histCount"></span></button>
+        <button role="tab" aria-selected="false" aria-controls="tab-sweep" id="t-sweep">Parameter sweep</button>
+        <button role="tab" aria-selected="false" aria-controls="tab-log" id="t-log">Solver log</button>
+        <button role="tab" aria-selected="false" aria-controls="tab-doc" id="t-doc">About the model</button>
+      </div>
+
+      <div class="tab-panel" role="tabpanel" id="tab-hist" aria-labelledby="t-hist">
+        <p class="dock-note">Click a chart to move the playhead there. Drag across a chart to zoom in; double-click to zoom out.</p>
+        <div class="charts">
+          <div class="chart"><h3>Angular velocity</h3><p class="sub">Body components, rad/s</p><div class="plot" id="p-w"></div></div>
+          <div class="chart"><h3>Tilt of the body axis</h3><p class="sub">Angle between e₃ and the vertical, degrees</p><div class="plot" id="p-tilt"></div></div>
+          <div class="chart"><h3>Normal reaction</h3><p class="sub">N/mg; dashed line N = mg</p><div class="plot" id="p-n"></div></div>
+          <div class="chart"><h3>Tangential contact force</h3><p class="sub">|F|, newtons</p><div class="plot" id="p-f"></div></div>
+          <div class="chart"><h3>Slip speed of the contact point</h3><p class="sub">mm/s; zero for rolling</p><div class="plot" id="p-slip"></div></div>
+          <div class="chart"><h3>Total energy</h3><p class="sub">Joules; never increases</p><div class="plot" id="p-e"></div></div>
         </div>
       </div>
 
-      <aside class="sheet" id="sheet" aria-live="polite">
-        <h2>Results</h2>
-        <p class="run-label" id="runLabel">Run a simulation to see results.</p>
-        <dl>
-          <dt>Spin reversal</dt><dd id="r-trev">–</dd>
-          <dt>Spin at the end</dt><dd id="r-wend">–</dd>
-          <dt>Largest rocking angle</dt><dd id="r-th">–</dd>
-          <dt>Energy lost</dt><dd id="r-de">–</dd>
-          <dt>Normal reaction N/mg</dt><dd id="r-n">–</dd>
-          <dt>Largest slip speed</dt><dd id="r-slip">–</dd>
-          <dt>Largest |F|/N</dt><dd id="r-ratio">–</dd>
-        </dl>
-        <p class="verdict" id="verdict" hidden></p>
-        <ul class="checks" id="checks" aria-label="Verification checks"></ul>
-        <div class="btn-row">
-          <button class="btn secondary" id="keepBtn" type="button" disabled>Keep for comparison</button>
-          <button class="btn secondary" id="csvBtn" type="button" disabled>Download CSV</button>
+      <div class="tab-panel" role="tabpanel" id="tab-cmp" aria-labelledby="t-cmp" hidden>
+        <p class="dock-note">Every run is kept here, newest first, up to twelve. Tick up to six to overlay their spin; the current run is drawn in black.</p>
+        <div class="split2">
+          <div class="tbl-wrap"><table class="tbl" id="histTbl">
+            <thead><tr><th>Show</th><th>Run</th><th class="n">Reversal</th><th class="n">ω₃ end</th><th class="n">Max tilt</th><th class="n">Energy lost</th><th></th></tr></thead>
+            <tbody></tbody></table></div>
+          <div class="chart"><h3>Spin ω₃ of the selected runs</h3><p class="sub">rad/s</p><div class="plot" id="p-cmp"></div></div>
         </div>
-      </aside>
-    </div>
+      </div>
 
-    <div class="section-head">
-      <h2>Time histories</h2>
-      <p>Drag across a chart to zoom, double-click to reset. The vertical line follows the animation.</p>
-    </div>
-    <div class="charts" id="charts">
-      <div class="chart wide"><h3>Spin of each kept run</h3><p class="sub">ω₃ about the body's vertical axis, rad/s</p>
-        <ul class="compare-list" id="compareList"></ul><p class="empty-note" id="compareEmpty">Run a case, press Keep for comparison, then change a setting and run again.</p><div class="plot" id="p-compare"></div></div>
-      <div class="chart"><h3>Angular velocity</h3><p class="sub">Body components, rad/s</p><div class="plot" id="p-w"></div></div>
-      <div class="chart"><h3>Tilt of the body axis</h3><p class="sub">Angle between e₃ and the vertical, degrees</p><div class="plot" id="p-tilt"></div></div>
-      <div class="chart"><h3>Normal reaction</h3><p class="sub">N/mg; the dashed line is N = mg</p><div class="plot" id="p-n"></div></div>
-      <div class="chart"><h3>Tangential contact force</h3><p class="sub">|F|, newtons</p><div class="plot" id="p-f"></div></div>
-      <div class="chart"><h3>Slip speed of the contact point</h3><p class="sub">mm/s; zero for rolling</p><div class="plot" id="p-slip"></div></div>
-      <div class="chart"><h3>Total energy</h3><p class="sub">Joules; never increases</p><div class="plot" id="p-e"></div></div>
-    </div>
+      <div class="tab-panel" role="tabpanel" id="tab-sweep" aria-labelledby="t-sweep" hidden>
+        <p class="dock-note">Runs the current setup once for each value of one parameter and plots a result against it. Everything else stays as set in Model setup.</p>
+        <form class="sweep-form" id="sweepForm" novalidate>
+          <label>Parameter<select id="swParam"></select></label>
+          <label>From<input type="number" id="swFrom" step="any"></label>
+          <label>To<input type="number" id="swTo" step="any"></label>
+          <label>Points<input type="number" id="swN" min="2" max="40" step="1" value="8"></label>
+          <label>Spacing<select id="swScale"><option value="lin">Linear</option><option value="log">Logarithmic</option></select></label>
+          <label>Plot<select id="swMetric">
+            <option value="tCross">Reversal time</option><option value="w3End">Spin at the end</option>
+            <option value="thetaMax">Largest rocking angle</option><option value="dE">Energy lost</option>
+            <option value="NmaxMg">Largest N/mg</option><option value="slipMax">Largest slip speed</option></select></label>
+          <button class="btn primary" type="submit" id="swRun">Run sweep</button>
+          <button class="btn" type="button" id="swCsv" disabled>Download CSV</button>
+        </form>
+        <p class="dock-note" id="swNote"></p>
+        <div class="split2">
+          <div class="chart"><h3 id="swTitle">Sweep result</h3><p class="sub" id="swSub">Run a sweep to see how the result depends on the parameter.</p><div class="plot" id="p-sweep"></div></div>
+          <div class="tbl-wrap"><table class="tbl" id="swTbl">
+            <thead><tr><th class="n" id="swTh">Value</th><th class="n">Reversal</th><th class="n">ω₃ end</th><th class="n">Max tilt</th><th class="n">Energy lost</th><th class="n">N/mg max</th></tr></thead>
+            <tbody></tbody></table></div>
+        </div>
+      </div>
 
-    <div class="about">
-      <section>
-        <h2>What is being simulated</h2>
-        <p>A semi-ellipsoid with semi-axes a₁, a₂, a₃ whose principal axes of inertia are turned slightly against its axes of curvature (the product of inertia I₁₂). Spun one way it keeps spinning; spun the other way it starts to rock and comes out spinning backwards.</p>
-        <p>With <strong>rolling</strong> the contact point never slips, nothing is lost, and the contact force is recovered after the fact. The other models let the contact point slip and solve nine equations: the angular velocity, the 1–2–3 Euler angles, and the velocity of the centre of mass.</p>
-        <h3>The normal reaction is solved, not assumed</h3>
-        <p>Requiring the centre of mass to stay at the height set by the contact geometry gives the normal reaction in closed form:</p>
-        <div class="eq">N = m (g + c + d·A₀) / (1 − m d·B − m d·A₁)</div>
-        <p>For these parameters it swings between 0.20 mg and 5.86 mg during a rolling reversal, so taking N = mg is not safe.</p>
-        <h3>Contact laws</h3>
-        <ul>
-          <li><strong>Coulomb</strong>: F = −μN v<sub>P</sub>/√(|v<sub>P</sub>|² + ε²), after Moffatt and Shimomura (2002).</li>
-          <li><strong>Drilling</strong>: an extra torque about the vertical of size up to μNρ, from friction over a small contact patch.</li>
-          <li><strong>Viscous</strong>: F = −c v<sub>P</sub>, the second law of Moffatt and Shimomura.</li>
-        </ul>
-      </section>
-      <section>
-        <h2>Checked against the paper</h2>
-        <p>The equations here are the same as in the paper's MATLAB code. For the paper's cases this page reproduces its results:</p>
-        <table class="ref">
-          <thead><tr><th>Case, unstable sense</th><th class="num">Reversal (paper)</th><th class="num">This page</th></tr></thead>
-          <tbody>
-            <tr><td>Rolling</td><td class="num">2.83 s</td><td class="num">2.832 s</td></tr>
-            <tr><td>Coulomb, μ = 0.15</td><td class="num">4.22 s</td><td class="num">4.224 s</td></tr>
-            <tr><td>Coulomb + drilling, ρ = 0.5 mm</td><td class="num">3.98 s</td><td class="num">3.978 s</td></tr>
-            <tr><td>Viscous, c = 500 kg/s</td><td class="num">2.90 s</td><td class="num">2.898 s</td></tr>
-            <tr><td>Coulomb, μ = 1, N fixed at mg</td><td class="num">2.43 s</td><td class="num">2.428 s</td></tr>
-          </tbody>
-        </table>
-        <h3>How it runs</h3>
-        <p>An adaptive Dormand–Prince integrator runs in your browser, in a background thread. The Coulomb law is stiff, so high friction or a small ε means smaller steps: the default case takes about a second, μ = 1 several seconds.</p>
-        <p>Every run reports four checks: the contact residual, whether the energy only goes down, whether N stays positive (the body never leaves the table), and whether the denominator of the N formula stays positive.</p>
-        <h3>Reference</h3>
-        <p>V. Itauriya and D. Mukherjee, <em>Slipping-contact friction in rattleback dynamics: extension of a rolling formulation using the Moffatt–Shimomura contact laws</em>, Department of Mechanical Engineering, IIT Kanpur.</p>
-      </section>
-    </div>
+      <div class="tab-panel" role="tabpanel" id="tab-log" aria-labelledby="t-log" hidden>
+        <ol class="log" id="log"></ol>
+      </div>
+
+      <div class="tab-panel" role="tabpanel" id="tab-doc" aria-labelledby="t-doc" hidden>
+        <div class="doc">
+          <section>
+            <h2>What is simulated</h2>
+            <p>A semi-ellipsoid with semi-axes a₁, a₂, a₃ whose principal axes of inertia are turned slightly against its axes of curvature, through the product of inertia I₁₂. Spun one way it keeps spinning; spun the other way it rocks and comes out spinning backwards.</p>
+            <p><b>Rolling</b> forbids slip: six equations, no energy loss, and the contact force is recovered after the fact. <b>Coulomb</b> and <b>viscous</b> let the contact point slip: nine equations for the angular velocity, the 1–2–3 Euler angles and the velocity of the centre of mass.</p>
+            <h3>The normal reaction is solved, not assumed</h3>
+            <p>Keeping the centre of mass at the height set by the contact geometry gives</p>
+            <div class="eq">N = m (g + c + d·A₀) / (1 − m d·B − m d·A₁)</div>
+            <p>During a rolling reversal it swings between 0.20 mg and 5.86 mg, so N = mg is not a safe shortcut.</p>
+            <h3>Contact laws</h3>
+            <ul>
+              <li><b>Coulomb</b>: F = −μN v<sub>P</sub>/√(|v<sub>P</sub>|² + ε²), after Moffatt and Shimomura (2002).</li>
+              <li><b>Drilling</b>: a torque about the vertical of size up to μNρ, from friction over a small contact patch.</li>
+              <li><b>Viscous</b>: F = −c v<sub>P</sub>, the second law of Moffatt and Shimomura.</li>
+            </ul>
+          </section>
+          <section>
+            <h2>Checked against the paper</h2>
+            <p>This page uses the same equations as the paper's MATLAB code and reproduces its results:</p>
+            <div class="tbl-wrap"><table class="tbl">
+              <thead><tr><th>Case, unstable sense</th><th class="n">Paper</th><th class="n">This page</th></tr></thead>
+              <tbody>
+                <tr><td>Rolling</td><td class="n">2.83 s</td><td class="n">2.831 s</td></tr>
+                <tr><td>Coulomb, μ = 0.15</td><td class="n">4.22 s</td><td class="n">4.223 s</td></tr>
+                <tr><td>Coulomb + drilling, ρ = 0.5 mm</td><td class="n">3.98 s</td><td class="n">3.977 s</td></tr>
+                <tr><td>Viscous, c = 500 kg/s</td><td class="n">2.90 s</td><td class="n">2.898 s</td></tr>
+                <tr><td>Coulomb, μ = 1, N fixed at mg</td><td class="n">2.43 s</td><td class="n">2.427 s</td></tr>
+              </tbody></table></div>
+            <h3>Verification checks</h3>
+            <p>Every run reports whether contact is maintained (the gap rate stays at zero), whether the energy only goes down, whether N stays positive so the body never leaves the table, and whether the denominator of the N formula stays positive.</p>
+            <h3>Reference</h3>
+            <p>V. Itauriya and D. Mukherjee, <i>Slipping-contact friction in rattleback dynamics: extension of a rolling formulation using the Moffatt–Shimomura contact laws</i>, Department of Mechanical Engineering, IIT Kanpur. Body parameters after Kane and Levinson (1982).</p>
+          </section>
+        </div>
+      </div>
+    </section>
   </main>
+
+  <!-- ========================================================== inspector -->
+  <aside class="panel right" aria-label="Results">
+    <div class="panel-head"><h2>Results</h2><span class="badge" id="resBadge">No run yet</span></div>
+    <div class="ins-sec">
+      <p class="run-label" id="runLabel">Run a simulation to see results.</p>
+      <dl class="kv">
+        <dt>Spin reversal</dt><dd id="r-trev">–</dd>
+        <dt>Spin at the end</dt><dd id="r-wend">–</dd>
+        <dt>Largest rocking angle</dt><dd id="r-th">–</dd>
+        <dt>Energy lost</dt><dd id="r-de">–</dd>
+        <dt>Normal reaction N/mg</dt><dd id="r-n">–</dd>
+        <dt>Largest slip speed</dt><dd id="r-slip">–</dd>
+        <dt>Largest |F|/N</dt><dd id="r-ratio">–</dd>
+      </dl>
+      <p class="verdict" id="verdict" hidden></p>
+    </div>
+    <div class="ins-sec">
+      <h3>At the playhead <span class="sum num" id="liveT">t = –</span></h3>
+      <dl class="kv live" id="live">
+        <dt>ω₁, ω₂</dt><dd id="l-w12">–</dd>
+        <dt>ω₃</dt><dd id="l-w3">–</dd>
+        <dt>Tilt</dt><dd id="l-tilt">–</dd>
+        <dt>N/mg</dt><dd id="l-n">–</dd>
+        <dt>|F|</dt><dd id="l-f">–</dd>
+        <dt>Slip speed</dt><dd id="l-slip">–</dd>
+        <dt>Energy</dt><dd id="l-e">–</dd>
+      </dl>
+    </div>
+    <div class="ins-sec">
+      <h3>Verification</h3>
+      <ul class="checks" id="checks"><li><span></span><span>Shown after a run.</span></li></ul>
+    </div>
+  </aside>
 </div>
 
-<footer>Undergraduate project, Department of Mechanical Engineering, IIT Kanpur. Body parameters after Kane and Levinson (1982); contact laws after Moffatt and Shimomura (2002).</footer>
+<!-- ============================================================ status bar -->
+<footer class="statusbar" role="status" aria-live="polite">
+  <span class="state"><span class="dot" id="sDot"></span><span id="sState">Ready</span></span>
+  <span class="bar"><div id="sBar"></div></span>
+  <span class="grow" id="sMsg"></span>
+  <span class="hide-sm" id="sStats"></span>
+</footer>
+</div>
+
+<dialog id="helpDlg" aria-labelledby="helpTitle">
+  <button class="btn ghost close" type="button" id="helpClose">Close</button>
+  <h2 id="helpTitle">Keyboard shortcuts</h2>
+  <table>
+    <tr><td><kbd>Ctrl</kbd> + <kbd>Enter</kbd></td><td>Run the simulation</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>Stop a running computation</td></tr>
+    <tr><td><kbd>Space</kbd></td><td>Play or pause</td></tr>
+    <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Step 10 ms; with <kbd>Shift</kbd>, 100 ms</td></tr>
+    <tr><td><kbd>Home</kbd> <kbd>End</kbd></td><td>Go to the start or the end</td></tr>
+    <tr><td><kbd>R</kbd></td><td>Jump to the spin reversal</td></tr>
+    <tr><td><kbd>1</kbd>–<kbd>4</kbd></td><td>Camera: iso, front, side, top</td></tr>
+    <tr><td><kbd>?</kbd></td><td>Show this list</td></tr>
+  </table>
+</dialog>
 
 <script type="module" src="js/app.js"></script>
 </body>
